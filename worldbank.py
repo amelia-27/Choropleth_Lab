@@ -5,7 +5,7 @@ import pandas as pd
 from pandas_datareader import wb
 
 
-app = Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+app = Dash(__name__, external_stylesheets=[dbc.themes.MINTY])
 
 indicators = {
     "IT.NET.USER.ZS": "Individuals using the Internet (% of population)",
@@ -13,16 +13,19 @@ indicators = {
     "SP.URB.TOTL.IN.ZS": "Urban population (% of total population)",
 }
 
+
+
 # get country name and ISO id for mapping on choropleth
 countries = wb.get_countries()
 countries["capitalCity"].replace({"": None}, inplace=True) #way to address non-countries
 countries.dropna(subset=["capitalCity"], inplace=True)
 countries = countries[["name", "iso3c"]]
 countries = countries[countries["name"] != "Kosovo"]
-#countries = countries[countries["name"] != "North Korea"] This should remove north korea, but it is actually not the reference name.
+countries = countries[countries["name"] != "Korea, Dem. People's Rep.North Korea"]
+
 countries = countries.rename(columns={"name": "country"})
 
-
+print ("Starting execution")
 def update_wb_data():
     # Retrieve specific world bank data from API
     df = wb.download(
@@ -31,11 +34,14 @@ def update_wb_data():
     df = df.reset_index()
     df.year = df.year.astype(int)
 
+    print(df.head(5).to_string())
+
     # Add country ISO3 id to main df
     df = pd.merge(df, countries, on="country")
     df = df.rename(columns=indicators)
-    return df
+    #df = df[df["country"] == "Korea, Dem. People's Rep.North Korea"]
 
+    return df
 
 app.layout = dbc.Container(
     [
@@ -104,7 +110,7 @@ app.layout = dbc.Container(
                             children="Submit",
                             n_clicks=0,
                             color="primary",
-                            className="mt-4",
+                            className="mt-4 fw-bold",
                         ),
                     ],
                     width=6,
@@ -133,11 +139,14 @@ def store_data(n_time):
 def update_graph(n_clicks, stored_dataframe, years_chosen, indct_chosen):
     dff = pd.DataFrame.from_records(stored_dataframe)
     print(years_chosen)
+    df = dff[dff["country"] == "Korea, Dem. People's Rep.North Korea"]
 
     if years_chosen[0] != years_chosen[1]:
         dff = dff[dff.year.between(years_chosen[0], years_chosen[1])]
         dff = dff.groupby(["iso3c", "country"])[indct_chosen].mean()
         dff = dff.reset_index()
+
+      #  print(dff.head().to_string())
 
         fig = px.choropleth(
             data_frame=dff,
