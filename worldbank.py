@@ -3,9 +3,10 @@ import plotly.express as px
 import dash_bootstrap_components as dbc
 import pandas as pd
 from pandas_datareader import wb
+from datetime import datetime
 
 
-app = Dash(__name__, external_stylesheets=[dbc.themes.MINTY])
+app = Dash(__name__, external_stylesheets=[dbc.themes.LUX])
 
 indicators = {
     "IT.NET.USER.ZS": "Individuals using the Internet (% of population)",
@@ -21,8 +22,7 @@ countries["capitalCity"].replace({"": None}, inplace=True) #way to address non-c
 countries.dropna(subset=["capitalCity"], inplace=True)
 countries = countries[["name", "iso3c"]]
 countries = countries[countries["name"] != "Kosovo"]
-countries = countries[countries["name"] != "Korea, Dem. People's Rep.North Korea"]
-
+countries = countries[countries["name"] != "Korea, Dem. People's Rep."]
 countries = countries.rename(columns={"name": "country"})
 
 print ("Starting execution")
@@ -52,31 +52,33 @@ app.layout = dbc.Container(
                         "Comparison of World Bank Country Data",
                         style={"textAlign": "center"},
                     ),
+                    html.H4(
+                        id = "date_last_updated",
+                        style = {"textAlign": "center"}
+                    ),
                     dcc.Graph(id="my-choropleth", figure={}),
                 ],
                 width=12,
             )
         ),
         dbc.Row(
-            dbc.Col(
-                [
-                    dbc.Label(
-                        "Select Data Set:",
-                        className="fw-bold",
-                        style={"textDecoration": "underline", "fontSize": 20},
-                    ),
-                    dcc.RadioItems(
-                        id="radio-indicator",
-                        options=[{"label": i, "value": i} for i in indicators.values()],
-                        value=list(indicators.values())[0],
-                        inputClassName="me-2",
-                    ),
-                ],
-                width=4,
-            )
-        ),
-        dbc.Row(
             [
+                dbc.Col(
+                    [
+                        dbc.Label(
+                            "Select Data Set:",
+                            className="fw-bold",
+                            style={"textDecoration": "underline", "fontSize": 20},
+                        ),
+                        dcc.Dropdown(
+                            id="dropdown",
+                            options=[{"label": i, "value": i} for i in indicators.values()],
+                            value=list(indicators.values())[0],
+                            className="me-2",
+                        ),
+                    ],
+                    #width
+                ),
                 dbc.Col(
                     [
                         dbc.Label(
@@ -105,6 +107,25 @@ app.layout = dbc.Container(
                                 2016: "2016",
                             },
                         ),
+                    ],
+                    width=6,
+
+                ),
+            ]
+        ),
+        dbc.Row(
+            [
+                dbc.Col(
+                    [
+                        html.Div(
+                            id = "click_counter",
+                            className = "mt-4 fw-bold"
+                        ),
+                    ],
+                    width = 4,
+                ),
+                dbc.Col(
+                    [
                         dbc.Button(
                             id="my-button",
                             children="Submit",
@@ -113,7 +134,8 @@ app.layout = dbc.Container(
                             className="mt-4 fw-bold",
                         ),
                     ],
-                    width=6,
+                    width=12,
+                    className="d-grid gap-2 d-md-flex justify-content-md-end",
                 ),
             ]
         ),
@@ -122,6 +144,20 @@ app.layout = dbc.Container(
     ]
 )
 
+@app.callback(
+    Output("date_last_updated", "children"),
+    Input("storage", "data"),
+)
+def update_last_fetched(data):
+    return f"Data last refreshed {datetime.now().strftime('%B %d, at %I:%M %p')}"
+
+@app.callback(
+    Output("click_counter", "children"),
+    Input("my-button", "n_clicks"),
+)
+def update_click_counter(n_clicks):
+    return f'Parameters have changed {n_clicks} times'
+#To print on display
 
 @app.callback(Output("storage", "data"), Input("timer", "n_intervals"))
 def store_data(n_time):
@@ -130,16 +166,19 @@ def store_data(n_time):
 
 
 @app.callback(
-    Output("my-choropleth", "figure"),
+    [Output("my-choropleth", "figure"),
+    Output("years-range", "value")],
     Input("my-button", "n_clicks"),
     Input("storage", "data"),
-    State("years-range", "value"),
-    State("radio-indicator", "value"),
+    [State("years-range", "value"),
+     State("dropdown", "value"),
+    State("years-range", "max")]
 )
-def update_graph(n_clicks, stored_dataframe, years_chosen, indct_chosen):
+def update_graph(n_clicks, stored_dataframe, years_chosen, indct_chosen, maximum_year):
     dff = pd.DataFrame.from_records(stored_dataframe)
     print(years_chosen)
-    df = dff[dff["country"] == "Korea, Dem. People's Rep.North Korea"]
+
+    years_chosen[1] = min(years_chosen[1] + 1, maximum_year)
 
     if years_chosen[0] != years_chosen[1]:
         dff = dff[dff.year.between(years_chosen[0], years_chosen[1])]
@@ -163,7 +202,7 @@ def update_graph(n_clicks, stored_dataframe, years_chosen, indct_chosen):
             geo={"projection": {"type": "natural earth"}},
             margin=dict(l=50, r=50, t=50, b=50),
         )
-        return fig
+        return fig, years_chosen
 
     if years_chosen[0] == years_chosen[1]:
         dff = dff[dff["year"].isin(years_chosen)]
@@ -182,7 +221,7 @@ def update_graph(n_clicks, stored_dataframe, years_chosen, indct_chosen):
             geo={"projection": {"type": "natural earth"}},
             margin=dict(l=50, r=50, t=50, b=50),
         )
-        return fig
+        return fig, years_chosen
 
 
 if __name__ == "__main__":
